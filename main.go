@@ -25,35 +25,38 @@ func main() {
 	flag.Parse()
 	args := flag.Args() 
 	if len(args) != 1 {
-		fmt.Fprintf(os.Stderr, "need to set a directory path\n")
-		os.Exit(1)
+		onError("need to set a directory path")
 	}
 	// 有効なパスでかつディレクトリパスか判定
 	dInfo, err := os.Stat(args[0])
 	if err != nil {
-		onError("%v\n", err)
+		onError(fmt.Sprintf("%v", err.Error()))
 	}
 	if !dInfo.IsDir() {
-		onError("%v is not directory\n", err)
+		onError(fmt.Sprintf("%v is not directory", err.Error()))
 	}
-	dirName := dInfo.Name()
+
 	dirPath := args[0]
 	dstFilePath := strings.Join([]string{dirPath, "zip"}, ".")
 
 	fInfoArr, err := ioutil.ReadDir(dirPath)
-	fInfoWzDirArr := combineDirPathAndFileInfo(dirPath, fInfoArr)
 	if err != nil {
-		onError("%v\n", err)
+		onError(fmt.Sprintf("%v", err.Error()))
 	}
-	if err := zipFiles(dstFilePath, fInfoWzDirArr, dirName); err != nil {
-		onError("%v\n", err)
+	if len(fInfoArr) < 1 {
+		onError(fmt.Sprintf("%v is empty directory", dirPath))
+	}
+	fInfoWzDirArr := combineDirPathAndFileInfo(dirPath, fInfoArr)
+
+	if err := zipFiles(dstFilePath, fInfoWzDirArr, dInfo.Name()); err != nil {
+		onError(fmt.Sprintf("%v", err.Error()))
 	}
 	fmt.Printf("saved as %v\n", dstFilePath)
 }
 
-func onError(template string, err error) {
-	fmt.Fprintf(os.Stderr, template, err)
 // onErrorはエラーメッセージを出力し、exitします。
+func onError(errMsg string) {
+	fmt.Fprintln(os.Stderr, errMsg)
 	os.Exit(1)
 }
 
