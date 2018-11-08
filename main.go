@@ -17,20 +17,18 @@ type FileInfoWithDir struct {
 	FileInfo os.FileInfo
 }
 
+// mainは指定されたディレクトリ内のファイル及びディレクトリを内包したzipファイルを
+// 指定ディレクトリと同階層に作成します。
 func main() {
-	/*
-	 * ディレクトリパスを受け取り、同階層にzipファイルを作成する
-	 */
 	// FIXME リファクタリング
 	// TODO 圧縮率の外部からの指定
-	// コマンドライン引数を取得
 	flag.Parse()
 	args := flag.Args() 
 	if len(args) != 1 {
 		fmt.Fprintf(os.Stderr, "need to set a directory path\n")
 		os.Exit(1)
 	}
-	// 指定されたパスがディレクトリか判定
+	// 有効なパスでかつディレクトリパスか判定
 	dInfo, err := os.Stat(args[0])
 	if err != nil {
 		onError("%v\n", err)
@@ -42,15 +40,11 @@ func main() {
 	dirPath := args[0]
 	dstFilePath := strings.Join([]string{dirPath, "zip"}, ".")
 
-	// 内容物のリストの取得
-	// FIXME 空の配列が取れたときはエラーにする
 	fInfoArr, err := ioutil.ReadDir(dirPath)
 	fInfoWzDirArr := combineDirPathAndFileInfo(dirPath, fInfoArr)
 	if err != nil {
 		onError("%v\n", err)
 	}
-	// zipファイルにまとめる
-	// if err := zipFiles(dstFilePath, fInfoWzDirArr); err != nil {
 	if err := zipFiles(dstFilePath, fInfoWzDirArr, dirName); err != nil {
 		onError("%v\n", err)
 	}
@@ -59,9 +53,12 @@ func main() {
 
 func onError(template string, err error) {
 	fmt.Fprintf(os.Stderr, template, err)
+// onErrorはエラーメッセージを出力し、exitします。
 	os.Exit(1)
 }
 
+// getFileListInDirは指定ディレクトリ内のファイル及びディレクトリの名称と
+// 指定ディレクトリのパスをまとめたFileInfoWithDir構造体の配列を返します。
 func getFileListInDir(dirPath string) ([]FileInfoWithDir, error) {
 	fInfoArr, err := ioutil.ReadDir(dirPath)
 	if err != nil {
@@ -72,10 +69,9 @@ func getFileListInDir(dirPath string) ([]FileInfoWithDir, error) {
 	return fInfoWzDirArr, nil
 }
 
+// combineDirPathAndFileInfoは指定されたディレクトリのパスとos.FileInfoをまとめた
+// FileInfoWithDir構造体の配列を返します。
 func combineDirPathAndFileInfo(dirPath string, fileInfos []os.FileInfo) []FileInfoWithDir {
-	/*
-	 * ディレクトリパスとos.FileInfoを構造体にまとめる
-	 */
 	var fInfoWzDirArr []FileInfoWithDir
 	for _, fileInfo := range fileInfos {
 		fInfoWzDirArr = append(fInfoWzDirArr, FileInfoWithDir{DirPath: dirPath, FileInfo: fileInfo})
@@ -84,10 +80,8 @@ func combineDirPathAndFileInfo(dirPath string, fileInfos []os.FileInfo) []FileIn
 	return fInfoWzDirArr
 }
 
+// zipFilesは指定ディレクトリ以下のファイル及びディレクトリをまとめたzipファイルを作成します。
 func zipFiles(dstName string, fInfoWzDirArr []FileInfoWithDir, baseInZip string) error {
-	/*
-	 * 指定されたディレクトリ内のファイル・ディレクトリをまとめたzipファイルを作成する
-	 */
 	zipFile, err := os.Create(dstName)
 	if err != nil {
 	   return err
@@ -97,15 +91,13 @@ func zipFiles(dstName string, fInfoWzDirArr []FileInfoWithDir, baseInZip string)
 	defer zipWriter.Close()
 
 	for _, fInfoWzDir := range fInfoWzDirArr {
-		// FIXME fInfoWzDirがディレクトリのものであった場合の処理が未実装
-		//       zipFiles()を再帰呼び出しする形を取る必要がある
-		// addFileToZip(zipWriter, fInfoWzDir, "")
 		addFileToZip(zipWriter, fInfoWzDir, baseInZip)
 	}
 
 	return nil
 }
 
+// addFileToZipはFileInfoWithDir構造体の配列を受け取り、zip.Writerを使ってzipファイルにファイルを追加します。
 func addFileToZip(zipWriter *zip.Writer, fInfoWzDir FileInfoWithDir, baseInZip string) error {
 	absPath := filepath.Join(fInfoWzDir.DirPath, fInfoWzDir.FileInfo.Name())
 	file, err := os.Open(absPath)
