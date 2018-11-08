@@ -20,8 +20,6 @@ type FileInfoWithDir struct {
 // mainは指定されたディレクトリ内のファイル及びディレクトリを内包したzipファイルを
 // 指定ディレクトリと同階層に作成します。
 func main() {
-	// FIXME リファクタリング
-	// TODO 圧縮率の外部からの指定
 	flag.Parse()
 	args := flag.Args() 
 	if len(args) != 1 {
@@ -46,9 +44,9 @@ func main() {
 	if len(fInfoArr) < 1 {
 		onError(fmt.Sprintf("%v is empty directory", dirPath))
 	}
-	fInfoWzDirArr := combineDirPathAndFileInfo(dirPath, fInfoArr)
+	fInfoWithDirArr := combineDirPathAndFileInfo(dirPath, fInfoArr)
 
-	if err := zipFiles(dstFilePath, fInfoWzDirArr, dInfo.Name()); err != nil {
+	if err := zipFiles(dstFilePath, fInfoWithDirArr, dInfo.Name()); err != nil {
 		onError(fmt.Sprintf("%v", err.Error()))
 	}
 	fmt.Printf("saved as %v\n", dstFilePath)
@@ -67,24 +65,24 @@ func getFileListInDir(dirPath string) ([]FileInfoWithDir, error) {
 	if err != nil {
 		return nil, err
 	}
-	fInfoWzDirArr := combineDirPathAndFileInfo(dirPath, fInfoArr)
+	fInfoWithDirArr := combineDirPathAndFileInfo(dirPath, fInfoArr)
 
-	return fInfoWzDirArr, nil
+	return fInfoWithDirArr, nil
 }
 
 // combineDirPathAndFileInfoは指定されたディレクトリのパスとos.FileInfoをまとめた
 // FileInfoWithDir構造体の配列を返します。
 func combineDirPathAndFileInfo(dirPath string, fileInfos []os.FileInfo) []FileInfoWithDir {
-	var fInfoWzDirArr []FileInfoWithDir
+	var fInfoWithDirArr []FileInfoWithDir
 	for _, fileInfo := range fileInfos {
-		fInfoWzDirArr = append(fInfoWzDirArr, FileInfoWithDir{DirPath: dirPath, FileInfo: fileInfo})
+		fInfoWithDirArr = append(fInfoWithDirArr, FileInfoWithDir{DirPath: dirPath, FileInfo: fileInfo})
 	}
 
-	return fInfoWzDirArr
+	return fInfoWithDirArr
 }
 
 // zipFilesは指定ディレクトリ以下のファイル及びディレクトリをまとめたzipファイルを作成します。
-func zipFiles(dstName string, fInfoWzDirArr []FileInfoWithDir, baseInZip string) error {
+func zipFiles(dstName string, fInfoWithDirArr []FileInfoWithDir, baseInZip string) error {
 	zipFile, err := os.Create(dstName)
 	if err != nil {
 	   return err
@@ -93,17 +91,17 @@ func zipFiles(dstName string, fInfoWzDirArr []FileInfoWithDir, baseInZip string)
 	zipWriter := zip.NewWriter(zipFile)
 	defer zipWriter.Close()
 
-	for _, fInfoWzDir := range fInfoWzDirArr {
-		addFileToZip(zipWriter, fInfoWzDir, baseInZip)
+	for _, fInfoWithDir := range fInfoWithDirArr {
+		addFileToZip(zipWriter, fInfoWithDir, baseInZip)
 	}
 
 	return nil
 }
 
 // addFileToZipはFileInfoWithDir構造体の配列を受け取り、zip.Writerを使ってzipファイルにファイルを追加します。
-func addFileToZip(zipWriter *zip.Writer, fInfoWzDir FileInfoWithDir, baseInZip string) error {
-	absPath := filepath.Join(fInfoWzDir.DirPath, fInfoWzDir.FileInfo.Name())
-	file, err := os.Open(absPath)
+func addFileToZip(zipWriter *zip.Writer, fInfoWithDir FileInfoWithDir, baseInZip string) error {
+	dstPath := filepath.Join(fInfoWithDir.DirPath, fInfoWithDir.FileInfo.Name())
+	file, err := os.Open(dstPath)
 	if err != nil {
 		return err
 	}
@@ -113,35 +111,33 @@ func addFileToZip(zipWriter *zip.Writer, fInfoWzDir FileInfoWithDir, baseInZip s
 	if err != nil {
 		return err
 	}
+	// ディレクトリが内包されている場合はbaseInZip(=zipファイル内でのカレントディレクトリ)を更新しaddFileToZipを呼び出す
 	if info.IsDir() {
-		childFInfoWzDirArr, err := getFileListInDir(absPath)
+		childFInfoWithDirArr, err := getFileListInDir(dstPath)
 		if err != nil {
 			return err
 		}
-		for _, childFInfoWzDir := range childFInfoWzDirArr {
-			addFileToZip(zipWriter, childFInfoWzDir, strings.Join([]string{baseInZip, info.Name()}, "/"))
+		for _, childFInfoWithDir := range childFInfoWithDirArr {
+			addFileToZip(zipWriter, childFInfoWithDir, strings.Join([]string{baseInZip, info.Name()}, "/"))
 		}
 	} else {
 		header, err := zip.FileInfoHeader(info)
 		if err != nil {
 			return nil
 		}
-
-		// 圧縮率の指定: http://golang.org/pkg/archive/zip/#pkg-constants
-		// zipファイル内のファイルパス: 絶対パスを渡すと/homeからのファイルパスでファイルが登録されてしまう為、
-		// 元のディレクトリのパスを除いたパスに変換する
-		header.Name = filepath.Join(baseInZip, fInfoWzDir.FileInfo.Name())
-		// 圧縮率
+		// zipファイル内のファイルパス: 相対パスにする必要がある
+		header.Name = filepath.Join(baseInZip, fInfoWithDir.FileInfo.Name())
+		// 圧縮率: http://golang.org/pkg/archive/zip/#pkg-constants
 		header.Method = zip.Deflate
 
 		writer, err := zipWriter.CreateHeader(header)
 		if err != nil {
 			return err
 		}
-
 		if _, err = io.Copy(writer, file); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
