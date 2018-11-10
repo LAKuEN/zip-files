@@ -1,4 +1,4 @@
-package main
+package zipfiles
 
 import (
 	"archive/zip"
@@ -25,32 +25,49 @@ func main() {
 	if len(args) != 1 {
 		onError("need to set a directory path")
 	}
-	// 有効なパスでかつディレクトリパスか判定
-	dInfo, err := os.Stat(args[0])
+
+	dstFilePath, err := InDir(args[0])
 	if err != nil {
-		onError(fmt.Sprintf("%v", err.Error()))
+		onError(err.Error())
+	}
+	fmt.Printf("saved as %v\n", dstFilePath)
+}
+
+// InDir は指定されたディレクトリの構造を保ったままzipファイル化します。
+func InDir(dirPath string) (string, error) {
+	// 有効なパスでかつディレクトリパスか判定
+	dInfo, err := os.Stat(dirPath)
+	if err != nil {
+		// onError(fmt.Sprintf("%v", err.Error()))
+		return "", err
 	}
 	if !dInfo.IsDir() {
-		onError(fmt.Sprintf("%v is not directory", err.Error()))
+		// onError(fmt.Sprintf("%v is not directory", err.Error()))
+		return "", fmt.Errorf("%v is not directory", err.Error())
 	}
 
-	dirPath := args[0]
+	// dirPath := args[0]
 	dstFilePath := strings.Join([]string{dirPath, "zip"}, ".")
 
 	fInfoArr, err := ioutil.ReadDir(dirPath)
 	if err != nil {
-		onError(fmt.Sprintf("%v", err.Error()))
+		// onError(fmt.Sprintf("%v", err.Error()))
+		return "", err
 	}
 	if len(fInfoArr) < 1 {
-		onError(fmt.Sprintf("%v is empty directory", dirPath))
+		// onError(fmt.Sprintf("%v is empty directory", dirPath))
+		return "", fmt.Errorf("%v is empty directory", dirPath)
 	}
 	fInfoWithDirArr := combineDirPathAndFileInfo(dirPath, fInfoArr)
 
 	if err := zipFiles(dstFilePath, fInfoWithDirArr, dInfo.Name()); err != nil {
-		onError(fmt.Sprintf("%v", err.Error()))
+		// onError(fmt.Sprintf("%v", err.Error()))
+		return "", err
 	}
-	fmt.Printf("saved as %v\n", dstFilePath)
+
+	return dstFilePath, nil
 }
+
 
 // onErrorはエラーメッセージを出力し、exitします。
 func onError(errMsg string) {
